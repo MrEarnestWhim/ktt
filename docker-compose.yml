@@ -1,0 +1,46 @@
+version: '3'
+
+services:
+  db:
+    image: postgres:12-alpine
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=pg_user
+      - POSTGRES_USER=postgres
+  app:
+    build:
+      context: .
+    env_file:
+      - ./.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - db
+    environment:
+      - WAIT_HOSTS=db:5432
+
+  redis:
+    image: redis:5.0.7-alpine
+    command: ["redis-server"]
+    hostname: redis
+    ports:
+      - '6379:6379'
+
+  worker:
+    build: .
+    depends_on:
+      - redis
+      - db
+    environment:
+      - WAIT_HOSTS=db:5432
+    command: >
+      bash -c "/app/wait
+      && celery -A celery_worker worker -l info -Q test-queue -c 1"
+
+  beat:
+    build: .
+    depends_on:
+      - redis
+      - db
+    command: "celery -A celery_app beat"
